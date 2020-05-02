@@ -1,13 +1,21 @@
-package com.incubatesoft.nats;
+package com.incubatesoft.gateway.nats;
 
 
+
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.Locale;
+import java.util.ResourceBundle;
+
 import io.nats.client.Connection;
 import io.nats.client.Nats;
 
 public class NatsPublisher {
 
+	private ResourceBundle gatewayResourceBundle;
+	private Locale locale = new Locale("en", "US");
+	
 	public NatsPublisher() {
 		
 	}
@@ -18,11 +26,13 @@ public class NatsPublisher {
 	 * @author Aditya
 	 */
 	public void publishMessage(String deviceId, StringBuilder deviceData) {
+		
 		try {
-			Connection natConn = Nats.connect("nats://0.0.0.0:4222");
-            // [begin publish_bytes]
-			System.out.println(" publishMessage() called !");
-			System.out.println(" Nats Connection : "+natConn);			
+			gatewayResourceBundle = ResourceBundle.getBundle("com.incubatesoft.gateway.resources.gateway_config",locale);
+			
+			// Connect to the NATS Server
+			String nats_URL = gatewayResourceBundle.getString("NATS_SERVER_URL");					
+			Connection natConn = Nats.connect(nats_URL);
             
             // Publish a message which includes both deviceId and deviceData
             String msgToPublish = deviceId + "||" +deviceData.toString();
@@ -33,9 +43,10 @@ public class NatsPublisher {
             natConn.flush(Duration.ZERO);   
             natConn.close();
             // [end publish_bytes]
+        } catch(IOException iexp) {
+        	iexp.printStackTrace();
         } catch (Exception e) {
             e.printStackTrace();
         }
-
 	}
 }

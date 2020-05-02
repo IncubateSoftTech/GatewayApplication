@@ -1,6 +1,7 @@
 package com.incubatesoft.gateway;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.nio.channels.Channel;
 import java.nio.channels.SelectionKey;
@@ -14,40 +15,61 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.ResourceBundle;
 import java.util.concurrent.ConcurrentHashMap;
 
-import com.incubatesoft.nats.NatsPublisher;
+import com.incubatesoft.gateway.nats.NatsPublisher;
 
 public class DeviceConnectivity implements Runnable{
 	private ServerSocketChannel serverChannel;
 	private Selector selector;
-
-	// hardcoded values to be moved out to a property or .env file
-	public static final String ADDRESS = "0.0.0.0"; //-BMC
-	public static final int PORT = 12324; //12324 - BMC , 12323 - JMC 
+		
+	private Locale locale = new Locale("en", "US");
+	private ResourceBundle gatewayResourceBundle;	
+	public static int GATEWAY_PORT ;//defaulted to 12324
+	InputStream props_input_stream; 
 
 	private SimpleDateFormat ftDateTime = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
 	private static ConcurrentHashMap<SocketChannel, Long>  mClientStatus = new ConcurrentHashMap<SocketChannel, Long>();
 	public int clients = 0;
 	private Map<SocketChannel, List<?>> dataTracking = new HashMap<SocketChannel, List<?>>();
-	private ByteBuffer readBuffer = ByteBuffer.allocate(16384); //16*1024 = 16384 [16KB]
+	private ByteBuffer readBuffer = ByteBuffer.allocate(16384); 
 	private Map<Channel, String> DeviceState = new HashMap<Channel, String>(); 
 	private Map<String,Long> DeviceLastTimeStamp = new HashMap<String, Long>();
 	private NatsPublisher natsPublisher = new NatsPublisher();
 	
-	public DeviceConnectivity() {
+	public DeviceConnectivity(String portNumber) {
+		try {
+			gatewayResourceBundle = ResourceBundle.getBundle("com.incubatesoft.gateway.resources.gateway_config", locale);
+			//Getting the default port from properties file -- Aditya
+			GATEWAY_PORT = Integer.parseInt(gatewayResourceBundle.getString("GATEWAY_PORT"));
+			
+			// Assigning the port number passed from Console -- Aditya  
+			GATEWAY_PORT = Integer.parseInt(portNumber);
+		}catch (NumberFormatException nfx) {
+			nfx.printStackTrace();
+	   } 
+		//end try-catch
+		
 		init();
 	}
 
 	private void init() {
-		try {
+		try {					
 			selector = Selector.open();
 			serverChannel = ServerSocketChannel.open();
 			serverChannel.configureBlocking(false);
+			
+			String ipAddress = gatewayResourceBundle.getString("GATEWAY_IP_ADDRESS");
+			int backlog = Integer.parseInt(gatewayResourceBundle.getString("SOCKET_BACKLOG"));
+			int ops = Integer.parseInt(gatewayResourceBundle.getString("KEY_INTEREST_SET"));
+			
+			System.out.println(ipAddress + "---" + GATEWAY_PORT + "---" + backlog + "---" + ops);
 
-			serverChannel.socket().bind(new java.net.InetSocketAddress(ADDRESS, PORT),5000);
-			serverChannel.register(selector, 16);
+			serverChannel.socket().bind(new java.net.InetSocketAddress(ipAddress, GATEWAY_PORT),backlog);
+			serverChannel.register(selector, ops);					
 
 		}catch(IOException ioexp) {
 			ioexp.printStackTrace();
@@ -61,26 +83,21 @@ public class DeviceConnectivity implements Runnable{
 		System.out.println("Now accepting connections..." + ftDateTime.format(recDateTime));
 		byte[] data;
 		while (!Thread.currentThread().isInterrupted()) {
-			try {
-				System.out.println(" selector : "+selector);
+			try {				
 				int ready = selector.select();
 				if (ready != 0){
 					Iterator<SelectionKey> keys = selector.selectedKeys().iterator();
-					while (keys.hasNext()) {
-						System.out.println(" inside while.. ");
+					while (keys.hasNext()) {				
 						
 						SelectionKey key = (SelectionKey)keys.next();
 						keys.remove();
-						if (key.isValid()){
-							System.out.println(" key is valid.. ");
+						if (key.isValid()){							
 							
-							if (key.isAcceptable()){
-								System.out.println(" key.isAcceptable() : "+key.isAcceptable());
+							if (key.isAcceptable()){								
 								accept(key);
 							}
 							if (key.isReadable()){
-								// broke down the tasks here - Sarat
-								System.out.println(" key.isReadable() : "+key.isReadable());
+								// broke down the tasks here - Sarat								
 								data = read(key);
 								processDeviceStream(key, data);
 							}
