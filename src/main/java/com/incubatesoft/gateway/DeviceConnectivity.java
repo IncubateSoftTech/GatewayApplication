@@ -1,7 +1,6 @@
 package com.incubatesoft.gateway;
 
 import java.io.IOException;
-import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.nio.channels.Channel;
 import java.nio.channels.SelectionKey;
@@ -28,16 +27,15 @@ public class DeviceConnectivity implements Runnable{
 		
 	private Locale locale = new Locale("en", "US");
 	private ResourceBundle gatewayResourceBundle;	
-	public static int GATEWAY_PORT ;//defaulted to 12324
-	InputStream props_input_stream; 
+	public static int GATEWAY_PORT ;	
 
 	private SimpleDateFormat ftDateTime = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
 	private static ConcurrentHashMap<SocketChannel, Long>  mClientStatus = new ConcurrentHashMap<SocketChannel, Long>();
 	public int clients = 0;
 	private Map<SocketChannel, List<?>> dataTracking = new HashMap<SocketChannel, List<?>>();
 	private ByteBuffer readBuffer = ByteBuffer.allocate(16384); 
-	private Map<Channel, String> DeviceState = new HashMap<Channel, String>(); 
-	private Map<String,Long> DeviceLastTimeStamp = new HashMap<String, Long>();
+	private Map<Channel, String> deviceState = new HashMap<Channel, String>(); 
+	private Map<String,Long> deviceLastTimeStamp = new HashMap<String, Long>();
 	private NatsPublisher natsPublisher = new NatsPublisher();
 	
 	public DeviceConnectivity(String portNumber) {
@@ -57,7 +55,8 @@ public class DeviceConnectivity implements Runnable{
 	}
 
 	private void init() {
-		try {					
+		try {		
+			
 			selector = Selector.open();
 			serverChannel = ServerSocketChannel.open();
 			serverChannel.configureBlocking(false);
@@ -270,7 +269,7 @@ public class DeviceConnectivity implements Runnable{
 			{
 				//Saving data to database
 				sDeviceID = lst.get(0).toString();
-				DeviceState.put(channel, sDeviceID);
+				deviceState.put(channel, sDeviceID);
 
 				//String sData = org.bson.internal.Base64.encode(data);
 
@@ -292,7 +291,7 @@ public class DeviceConnectivity implements Runnable{
 					e.printStackTrace();
 				}
 				//storing late timestamp of device
-				DeviceLastTimeStamp.put(sDeviceID, System.currentTimeMillis());
+				deviceLastTimeStamp.put(sDeviceID, System.currentTimeMillis());
 
 			}else{
 				// data not good.

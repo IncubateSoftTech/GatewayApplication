@@ -8,6 +8,8 @@ import java.time.Duration;
 import java.util.Locale;
 import java.util.ResourceBundle;
 
+import org.json.JSONObject;
+
 import io.nats.client.Connection;
 import io.nats.client.Nats;
 
@@ -15,6 +17,7 @@ public class NatsPublisher {
 
 	private ResourceBundle gatewayResourceBundle;
 	private Locale locale = new Locale("en", "US");
+	private JSONObject gatewayJson = new JSONObject();
 	
 	public NatsPublisher() {
 		
@@ -28,16 +31,21 @@ public class NatsPublisher {
 	public void publishMessage(String deviceId, StringBuilder deviceData) {
 		
 		try {
+			
+			// Creating a JSON Object
+			gatewayJson.put("deviceId", deviceId);
+			gatewayJson.put("deviceData", deviceData.toString());			
+
 			gatewayResourceBundle = ResourceBundle.getBundle("com.incubatesoft.gateway.resources.gateway_config",locale);
 			
 			// Connect to the NATS Server
-			String nats_URL = gatewayResourceBundle.getString("NATS_SERVER_URL");					
-			Connection natConn = Nats.connect(nats_URL);
+			String natsUrl = gatewayResourceBundle.getString("NATS_SERVER_URL");					
+			Connection natConn = Nats.connect(natsUrl);
             
             // Publish a message which includes both deviceId and deviceData
-            String msgToPublish = deviceId + "||" +deviceData.toString();
+            String msgToPublish = gatewayJson.toString();                        
 
-            natConn.publish("data_packet", msgToPublish.toString().getBytes(StandardCharsets.UTF_8));
+            natConn.publish("data_packet", msgToPublish.getBytes(StandardCharsets.UTF_8));
 
             // Make sure the message goes through before we close
             natConn.flush(Duration.ZERO);   
