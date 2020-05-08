@@ -19,9 +19,14 @@ import java.util.Map;
 import java.util.ResourceBundle;
 import java.util.concurrent.ConcurrentHashMap;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
 import com.incubatesoft.gateway.nats.NatsPublisher;
 
 public class DeviceConnectivity implements Runnable{
+	private static Logger log = LogManager.getLogger(DeviceConnectivity.class.getName());
+	
 	private ServerSocketChannel serverChannel;
 	private Selector selector;
 		
@@ -47,10 +52,10 @@ public class DeviceConnectivity implements Runnable{
 			// Assigning the port number passed from Console -- Aditya  
 			GATEWAY_PORT = Integer.parseInt(portNumber);
 		}catch (NumberFormatException nfx) {
+			log.error(" Number format Exception occurred : ", nfx);
 			nfx.printStackTrace();
-	   } 
-		//end try-catch
-		
+	   }//end try-catch 
+				
 		init();
 	}
 
@@ -65,21 +70,23 @@ public class DeviceConnectivity implements Runnable{
 			int backlog = Integer.parseInt(gatewayResourceBundle.getString("SOCKET_BACKLOG"));
 			int ops = Integer.parseInt(gatewayResourceBundle.getString("KEY_INTEREST_SET"));
 			
-			System.out.println(ipAddress + "---" + GATEWAY_PORT + "---" + backlog + "---" + ops);
+			log.debug(ipAddress + "---" + GATEWAY_PORT + "---" + backlog + "---" + ops);
 
 			serverChannel.socket().bind(new java.net.InetSocketAddress(ipAddress, GATEWAY_PORT),backlog);
 			serverChannel.register(selector, ops);					
 
 		}catch(IOException ioexp) {
+			log.error(" Exception is : ", ioexp);
 			ioexp.printStackTrace();
 		}catch(Exception exp) {
+			log.error(" Exception is : ", exp);
 			exp.printStackTrace();
 		}		
 	}
 
 	public void run(){
 		Date recDateTime = new Date();
-		System.out.println("Now accepting connections..." + ftDateTime.format(recDateTime));
+		log.debug("Now accepting connections..." + ftDateTime.format(recDateTime));
 		byte[] data;
 		while (!Thread.currentThread().isInterrupted()) {
 			try {				
@@ -104,7 +111,8 @@ public class DeviceConnectivity implements Runnable{
 					}
 				}
 			}
-			catch (Exception rExp) {                
+			catch (Exception rExp) {         
+				log.error(" Exception while accept() or read() : ", rExp);
 				rExp.printStackTrace(); 
 			}
 		}        	
@@ -116,6 +124,7 @@ public class DeviceConnectivity implements Runnable{
 		mClientStatus.put(socketChannel, System.currentTimeMillis());
 		if (socketChannel == null)
 		{
+			log.error(" Socket Channel is null ");
 			throw new IOException("Socket Channel is null");
 		}
 		socketChannel.configureBlocking(false);
@@ -144,6 +153,7 @@ public class DeviceConnectivity implements Runnable{
 			clients--;
 			channel.close();
 			key.cancel();
+			log.error(" No data found ");
 			throw new IOException("No data found");
 		}else {
 			readBuffer.flip();
@@ -193,6 +203,7 @@ public class DeviceConnectivity implements Runnable{
 			try {
 				channel.write(bSend);
 			} catch (IOException e) {
+				log.error(" Failed to send acknowledgement ");
 				throw new IOException("Failed to send acknowledgement");
 			}
 
@@ -222,6 +233,7 @@ public class DeviceConnectivity implements Runnable{
 			try {
 				channel.write(bSend);
 			} catch (IOException e) {
+				log.error(" Could not send Data Reception Acknowledgement ");
 				throw new IOException("Could not send Data Reception Acknowledgement");
 			}
 		}
@@ -249,7 +261,7 @@ public class DeviceConnectivity implements Runnable{
 				ii++;
 			}
 			// printing the IMEI #. - Sarat
-			System.out.println("IMEI#: "+sDeviceID);
+			log.debug("IMEI#: "+sDeviceID);
 
 			LinkedList<String> lstDevice = new LinkedList<String>();
 			lstDevice.add(sDeviceID);
@@ -259,7 +271,7 @@ public class DeviceConnectivity implements Runnable{
 			try {
 				sendDeviceHandshake(key, true);
 			} catch (IOException e) {
-				e.printStackTrace();
+				log.error(" Exception occurred at Device Handshake stage ",e);
 			}
 			// second call post handshake where the device sends the actual data. - Sarat
 		}else if(data.length > 17){
@@ -275,20 +287,20 @@ public class DeviceConnectivity implements Runnable{
 
 				// printing the data after it has been received - Sarat
 				StringBuilder deviceData = byteToStringBuilder(data);
-				System.out.println(" Data received from device : "+deviceData);
+				log.debug(" Data received from device : "+deviceData);
 				
 				try {
 					//publish device IMEI and packet data to Nats Server
 					natsPublisher.publishMessage(sDeviceID, deviceData);
 				} catch(Exception nexp) {
-					nexp.printStackTrace();
+					log.error(" Exception occurred at NATS Publish message stage ",nexp);					
 				}
 
 				//sending response to device after processing the AVL data. - Sarat
 				try {
 					sendDataReceptionCompleteMessage(key, data);
 				} catch (IOException e) {
-					e.printStackTrace();
+					log.error(" Exception occurred while sending response to device ",e);
 				}
 				//storing late timestamp of device
 				deviceLastTimeStamp.put(sDeviceID, System.currentTimeMillis());
@@ -298,6 +310,7 @@ public class DeviceConnectivity implements Runnable{
 				try {
 					sendDeviceHandshake(key, false);
 				} catch (IOException e) {
+					log.error(" Bad data received ",e.getMessage());
 					throw new IOException("Bad data received");
 				}
 			}
@@ -306,6 +319,7 @@ public class DeviceConnectivity implements Runnable{
 			try {
 				sendDeviceHandshake(key, false);
 			} catch (IOException e) {
+				log.error(" Bad data received ",e.getMessage());
 				throw new IOException("Bad data received");
 			}
 		}
